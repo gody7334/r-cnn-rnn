@@ -16,6 +16,9 @@ add_path(package_path)
 package_path = osp.join(this_dir, '.', 'graph')
 add_path(package_path)
 
+# package_path = osp.join(this_dir, '.', 'graph', 'ops')
+# add_path(package_path)
+
 # Add lib to PYTHONPATH
 # lib_path = osp.join(this_dir, '..', 'lib')
 # add_path(lib_path)
