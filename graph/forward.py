@@ -7,6 +7,7 @@ from config import global_config
 from graph.ops import image_embedding
 from graph.ops import image_processing
 from graph.ops import inputs as input_ops
+from graph.ops.debug import _debug_func
 
 class Forward(object):
 
@@ -122,11 +123,9 @@ class Forward(object):
         # This LSTM cell has biases and outputs tanh(new_c) * sigmoid(o), but the
         # modified LSTM in the "Show and Tell" paper has no biases and outputs
         # new_c * sigmoid(o).
-        lstm_cell = tf.contrib.rnn.BasicLSTMCell(
-            num_units=self.config.num_lstm_units, state_is_tuple=True)
+        lstm_cell = tf.contrib.rnn.BasicLSTMCell(num_units=self.config.num_lstm_units, state_is_tuple=True)
         if self.mode == "train":
-          lstm_cell = tf.contrib.rnn.DropoutWrapper(
-              lstm_cell,
+          lstm_cell = tf.contrib.rnn.DropoutWrapper(lstm_cell,
               input_keep_prob=self.config.lstm_dropout_keep_prob,
               output_keep_prob=self.config.lstm_dropout_keep_prob)
 
