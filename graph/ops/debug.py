@@ -40,6 +40,7 @@ def debug_func(tf, tf_name, tf_op, tf_type, tf_device, print_tf, print_op, break
     print('tf_op: ')
     print(tf_op)
   if break_point:
+    # name, tf_name, tf_shape, tf_type, tf_device, tf_op, tf
     ipdb.set_trace()  # BREAKPOINT
 
   return False

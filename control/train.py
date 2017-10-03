@@ -5,10 +5,11 @@ from __future__ import print_function
 import tensorflow as tf
 
 # get parsing argument
-from config import global_config
+from utils.config import global_config
 from graph.build_data import Build_Data
 from graph.forward import Forward
 from graph.backward import Backward
+from control.prepare_dataset import PrepareDataset
 
 class Train(object):
 
@@ -19,19 +20,33 @@ class Train(object):
         self.optimize = None
         self.g = None
         self.mode = 'train'
+        self.prepared_dataset = None
+        
+        self.data = None
+        self.model = None
 
     def run(self):
         global_config.assign_config()
+#         self.prepared_dataset = PrepareDataset()
         self.build_computation_graph()
-        
         self.run_training()
+
+        # export CUDA_VISIBLE_DEVICES=
+        # export CUDA_VISIBLE_DEVICES=0
+        # os.environ['CUDA_VISIBLE_DEVICES'] = ''
+        # os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+        # self.run_partial_graph()
 
     def build_computation_graph(self):
         # Build the TensorFlow graph.
         g = tf.Graph()
         with g.as_default():
             data = Build_Data(mode='train')
+            self.data = data
+            
             model = Forward(mode='train',data=data)
+            self.model = model
+            
             optimize = Backward(model = model)
             self.setup_inception_initializer()
 
@@ -66,8 +81,41 @@ class Train(object):
             global_config.global_config.train_dir,
             log_every_n_steps=global_config.parse_args.log_every_n_steps,
             graph=self.g,
-            global_step=self.optimize.global_step,
+            global_step=self.model.global_step,
             number_of_steps=global_config.parse_args.number_of_steps,
+            save_summaries_secs=60,
             init_fn=self.init_fn,
             saver=self.saver,
             session_config=sess_config)
+      
+    def run_partial_graph(self):
+        sess_config = tf.ConfigProto(allow_soft_placement=True)
+        sess_config.gpu_options.allow_growth=True
+        with tf.Session(graph=self.g, config=sess_config) as sess:
+            # But now we build our coordinator to coordinate our child threads with
+            # the main thread
+            coord = tf.train.Coordinator()
+            
+            # Beware, if you don't start all your queues before runnig anything
+            # The main threads will wait for them to start and you will hang again
+            # This helper start all queues in tf.GraphKeys.QUEUE_RUNNERS
+            threads = tf.train.start_queue_runners(coord=coord)
+            
+            # init all variables
+            sess.run(tf.global_variables_initializer())
+            
+            # init inception net
+            self.init_fn(sess)
+            
+            import ipdb; ipdb.set_trace()
+            # print(sess.run(self.model.input_mask))
+            # print(sess.run(self.model.sequence_length))
+            # print(sess.run(self.model.lstm_outputs))
+            
+            print(sess.run(self.model.logits))
+            print(sess.run(self.model.targets))
+            print(sess.run(self.model.weights))
+            # print(sess.run(self.data.target_seqs))
+            # print(sess.run(self.data.input_mask))
+            
+            sess.close()

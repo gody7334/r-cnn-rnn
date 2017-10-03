@@ -21,6 +21,8 @@ from __future__ import print_function
 
 
 import tensorflow as tf
+import ipdb
+from pprint import pprint
 
 from tensorflow.contrib.slim.python.slim.nets.inception_v3 import inception_v3_base
 
@@ -111,4 +113,4 @@ def inception_v3(images,
     for v in end_points.values():
       tf.contrib.layers.summaries.summarize_activation(v)
 
-  return net
+  return net, end_points

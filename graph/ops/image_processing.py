@@ -36,8 +36,8 @@ def distort_image(image, thread_id):
       [0, 1].
   """
   # Randomly flip horizontally.
-  with tf.name_scope("flip_horizontal", values=[image]):
-    image = tf.image.random_flip_left_right(image)
+#   with tf.name_scope("flip_horizontal", values=[image]):
+#     image = tf.image.random_flip_left_right(image)
 
   # Randomly distort the colors based on thread id.
   color_ordering = thread_id % 2
@@ -58,8 +58,19 @@ def distort_image(image, thread_id):
 
   return image
 
+def draw_tf_bounding_boxes(images, scale_bboxes, name=""):
+  # mscoco def (top-left is min)
+  xmin = tf.slice(scale_bboxes,[0,0,0],[-1,-1,1])
+  ymin = tf.slice(scale_bboxes,[0,0,1],[-1,-1,1])
+  xmax = tf.add(xmin,tf.slice(scale_bboxes,[0,0,2],[-1,-1,1]))
+  ymax = tf.add(ymin,tf.slice(scale_bboxes,[0,0,3],[-1,-1,1]))
+  # tf bbox coor
+  tf_scale_bbox = tf.concat([ymin, xmin, ymax, xmax],2)
+  image_with_bbox = tf.image.draw_bounding_boxes(images, tf_scale_bbox)
+  tf.summary.image("resized_image_with_bbox"+name,image_with_bbox)
 
 def process_image(encoded_image,
+                  origin_bbox,
                   is_training,
                   height,
                   width,
@@ -104,23 +115,45 @@ def process_image(encoded_image,
       raise ValueError("Invalid image format: %s" % image_format)
   image = tf.image.convert_image_dtype(image, dtype=tf.float32)
   image_summary("original_image", image)
+  
+  origin_size =tf.slice(tf.shape(image,"origin_size"),[0],[2])
 
   # Resize image.
-  assert (resize_height > 0) == (resize_width > 0)
-  if resize_height:
-    image = tf.image.resize_images(image,
-                                   size=[resize_height, resize_width],
-                                   method=tf.image.ResizeMethod.BILINEAR)
+#   assert (resize_height > 0) == (resize_width > 0)
+#   if resize_height:
+#     image = tf.image.resize_images(image,
+#                                   size=[resize_height, resize_width],
+#                                   method=tf.image.ResizeMethod.BILINEAR)
 
-  # Crop to final dimensions.
-  if is_training:
-    image = tf.random_crop(image, [height, width, 3])
-  else:
-    # Central crop, assuming resize_height > height, resize_width > width.
-    image = tf.image.resize_image_with_crop_or_pad(image, height, width)
+#   # Crop to final dimensions.
+#   if is_training:
+#     image = tf.random_crop(image, [height, width, 3])
+#   else:
+#     # Central crop, assuming resize_height > height, resize_width > width.
+#     image = tf.image.resize_image_with_crop_or_pad(image, height, width)
 
+# For now, do not random crop, otherwise bbox will shift
+# resize bbox is needed as each picture are resized differently.
+  image = tf.image.resize_images(image,
+                                  size=[height, width],
+                                  method=tf.image.ResizeMethod.BILINEAR)
   image_summary("resized_image", image)
-
+  
+  # start to cal resize bbox  
+  modify_size = tf.slice(tf.shape(image),[0],[2])
+  
+  # reverse image's shape as: image (n,h,w,c) bbox (x,y,w,h)
+  origin_size = tf.reverse_v2(origin_size,[0])
+  modify_size = tf.reverse_v2(modify_size,[0])
+  
+#   scale = tf.divide(modify_size, origin_size)
+  # normalize bbox into 0 ~ 1
+  scale = tf.divide(tf.ones([2], tf.float32), tf.cast(origin_size, tf.float32))
+  scale = tf.expand_dims(tf.concat([scale,scale],0),0)
+  scale_bbox = tf.multiply(tf.cast(origin_bbox,tf.float32),tf.cast(scale,tf.float32))
+  
+#   draw_tf_bounding_boxes(tf.expand_dims(image,0),tf.expand_dims(scale_bbox,0),name="target")
+  
   # Randomly distort the image.
   if is_training:
     image = distort_image(image, thread_id)
@@ -130,4 +163,5 @@ def process_image(encoded_image,
   # Rescale to [-1,1] instead of [0, 1]
   image = tf.subtract(image, 0.5)
   image = tf.multiply(image, 2.0)
-  return image
+  return image, scale_bbox
+  

@@ -43,7 +43,7 @@ def parse_sequence_example(serialized, image_feature, caption_feature):
           image_feature: tf.FixedLenFeature([], dtype=tf.string)
       },
       sequence_features={
-          caption_feature: tf.FixedLenSequenceFeature([], dtype=tf.int64),
+          caption_feature: tf.FixedLenSequenceFeature([4], dtype=tf.float32),
       })
 
   encoded_image = context[image_feature]
@@ -84,6 +84,7 @@ def prefetch_input_data(reader,
   Returns:
     A Queue containing prefetched string values.
   """
+  # check if dataset file exist
   data_files = []
   for pattern in file_pattern.split(","):
     data_files.extend(tf.gfile.Glob(pattern))
@@ -93,11 +94,25 @@ def prefetch_input_data(reader,
     tf.logging.info("Prefetching values from %d files matching %s",
                     len(data_files), file_pattern)
 
+  """
+  Queues are a convenient TensorFlow mechanism to compute tensors 
+  asynchronously using multiple threads. For example in the canonical 
+  'Input Reader' setup one set of threads generates filenames in a queue; 
+  a second set of threads read records from the files, processes them, 
+  and enqueues tensors on a second queue; a third set of threads dequeues 
+  these input records to construct batches and runs them through training 
+  operations.
+  """
+  
   if is_training:
+    # create a queue to store filenames (string)
     filename_queue = tf.train.string_input_producer(
         data_files, shuffle=True, capacity=16, name=shard_queue_name)
+        
+    # calculate min capacity and capacity
     min_queue_examples = values_per_shard * input_queue_capacity_factor
     capacity = min_queue_examples + 100 * batch_size
+    # create a queue to store raw data
     values_queue = tf.RandomShuffleQueue(
         capacity=capacity,
         min_after_dequeue=min_queue_examples,
@@ -112,8 +127,13 @@ def prefetch_input_data(reader,
 
   enqueue_ops = []
   for _ in range(num_reader_threads):
+    # read file (value) from filename queue
+    # ps: tf reader is also tf graph operation
     _, value = reader.read(filename_queue)
+    # values_queue.enqueue is a enqueue operation put value into values_queue
     enqueue_ops.append(values_queue.enqueue([value]))
+    
+  # values_queue: a queue, enqueue_ops: is a operation on values_queue
   tf.train.queue_runner.add_queue_runner(tf.train.queue_runner.QueueRunner(
       values_queue, enqueue_ops))
   tf.summary.scalar(
@@ -181,11 +201,12 @@ def batch_with_dynamic_pad(images_and_captions,
   enqueue_list = []
   for image, caption in images_and_captions:
     caption_length = tf.shape(caption)[0]
-    input_length = tf.expand_dims(tf.subtract(caption_length, 1), 0)
+    input_length = tf.subtract(caption_length,1)
+    # input_length = tf.expand_dims(tf.subtract(caption_length, 1), 0)
 
-    input_seq = tf.slice(caption, [0], input_length)
-    target_seq = tf.slice(caption, [1], input_length)
-    indicator = tf.ones(input_length, dtype=tf.int32)
+    input_seq = tf.slice(caption, [0,0], [input_length,4])
+    target_seq = tf.slice(caption, [1,0], [input_length,4])
+    indicator = tf.ones([input_length,4], dtype=tf.int32)
     enqueue_list.append([image, input_seq, target_seq, indicator])
 
   images, input_seqs, target_seqs, mask = tf.train.batch_join(

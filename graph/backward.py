@@ -3,7 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
-from config import global_config
+from utils.config import global_config
 
 class Backward(object):
 
@@ -13,10 +13,8 @@ class Backward(object):
         self.training_config = global_config.global_config
         self.model_config = global_config.global_config
 
-        self.global_step = None
         self.train_op = None
 
-        self.setup_global_step()
         self.build_optimization()
 
     def build_optimization(self):
@@ -45,7 +43,7 @@ class Backward(object):
         # Set up the training ops.
         train_op = tf.contrib.layers.optimize_loss(
             loss=self.model.total_loss,
-            global_step=self.global_step,
+            global_step=self.model.global_step,
             learning_rate=learning_rate,
             optimizer=self.training_config.optimizer,
             clip_gradients=self.training_config.clip_gradients,
@@ -53,12 +51,3 @@ class Backward(object):
 
         self.train_op = train_op
 
-    def setup_global_step(self):
-        """Sets up the global step Tensor."""
-        global_step = tf.Variable(
-            initial_value=0,
-            name="global_step",
-            trainable=False,
-            collections=[tf.GraphKeys.GLOBAL_STEP, tf.GraphKeys.GLOBAL_VARIABLES])
-
-        self.global_step = global_step
