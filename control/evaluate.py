@@ -11,7 +11,7 @@ import numpy as np
 # get parsing argument
 from utils.config import global_config
 from graph.build_data import Build_Data
-from graph.forward import Forward
+from graph.forward.lstm import LSTM
 from graph.backward import Backward
 from control.prepare_dataset import PrepareDataset
 

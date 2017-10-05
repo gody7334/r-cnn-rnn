@@ -7,7 +7,7 @@ import tensorflow as tf
 # get parsing argument
 from utils.config import global_config
 from graph.build_data import Build_Data
-from graph.forward import Forward
+from graph.forward.lstm import LSTM
 from graph.backward import Backward
 from control.prepare_dataset import PrepareDataset
 
@@ -44,7 +44,7 @@ class Train(object):
             data = Build_Data(mode='train')
             self.data = data
             
-            model = Forward(mode='train',data=data)
+            model = LSTM(mode='train',data=data)
             self.model = model
             
             optimize = Backward(model = model)
